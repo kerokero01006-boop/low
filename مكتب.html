@@ -1,0 +1,334 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>إدارة مكتب المحاماة</title>
+<style>
+[hidden]{display:none!important}
+.ro .w{display:none!important}
+html,body{margin:0;background:#f3f1ec;color:#1d2330;font-family:Tahoma,Arial,sans-serif;font-size:15px}
+header{background:#2b1d0f;color:#f3e7d3;padding:14px 18px;font-size:18px;font-weight:700}
+nav{display:flex;gap:4px;overflow-x:auto;background:#2b1d0f;padding:0 10px}
+nav button{background:none;border:0;color:#f3e7d3;opacity:.75;padding:10px 12px;font:inherit;white-space:nowrap;cursor:pointer;border-bottom:3px solid transparent}
+nav button.on{opacity:1;border-bottom-color:#d9a441}
+main{max-width:1000px;margin:0 auto;padding:16px}
+.c{background:#fff;color:#1d2330;border:1px solid #d8d3c7;border-radius:8px;padding:12px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;background:#fff;min-width:520px}
+th,td{padding:8px 10px;border-bottom:1px solid #d8d3c7;text-align:start;color:#1d2330}
+th{background:#ece7dc;color:#667085;font-size:13px}
+.tw{overflow-x:auto;border:1px solid #d8d3c7;border-radius:8px}
+input,select,textarea{display:block;width:100%;box-sizing:border-box;padding:8px;border:1px solid #d8d3c7;border-radius:6px;font:inherit;color:#1d2330!important;background:#fff!important}
+label{display:block;margin:8px 0;color:#667085;font-size:13px}
+button{font:inherit;color:#1d2330;background:#fff;padding:7px 12px;border:1px solid #d8d3c7;border-radius:6px;cursor:pointer}
+button.pr{background:#7a4b1f;color:#fff;border-color:#7a4b1f}
+button.dg{color:#b42318}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.bar input{flex:1;min-width:160px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:12px;z-index:9}
+.box{background:#fff;color:#1d2330;border-radius:10px;padding:18px;width:min(460px,100%);max-height:90vh;overflow:auto}
+.box .bar{position:sticky;bottom:-18px;background:#fff;padding:10px 0 12px;margin:10px 0 -18px;border-top:1px solid #d8d3c7;justify-content:flex-start}
+.al{border-right:4px solid #b54708;padding:8px 12px;margin:6px 0;background:#fffaeb;color:#1d2330;border-radius:6px}
+.ok{color:#067647}.mut{color:#667085}
+#note{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#2b1d0f;color:#fff;padding:9px 16px;border-radius:8px;z-index:20}
+</style><script src=https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js></script></head><body>
+<header><span>⚖️ مكتب المستشار كيرلس ماهر المحامي</span> <button id=hus hidden onclick="go('users')" style="margin-right:12px;background:transparent;color:#f3e7d3;border:1px solid #d9a441;border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer">المستخدمين والصلاحيات</button></header>
+<nav id=nav></nav><main id=main></main>
+<div id=m class=ov hidden></div>
+<div id=note hidden></div>
+<script>
+var K='lawoffice-v1',tab='dash',q='';
+var db={clients:[],cases:[],sessions:[],tasks:[],notices:[],accounts:[]};
+try{var s=localStorage.getItem(K);if(s)db=Object.assign(db,JSON.parse(s))}catch(e){}
+function save(){if(window.pushDb)window.pushDb(db)}
+var $=function(x){return document.querySelector(x)};
+var uid=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var today=function(){var d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+var addDays=function(n){var d=new Date(today()+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+var find=function(t,id){return db[t].find(function(x){return x.id===id})};
+var nm=function(t,id){var r=find(t,id);return r?esc(r.title||r.name||r.number):'—'};
+var TABS=[['dash','الرئيسية'],['clients','العملاء'],['cases','القضايا'],['sessions','الجلسات'],['tasks','المهام'],['notices','الإعلانات'],['accounts','حسابات العملاء']];
+var T={clients:'عميل',cases:'قضية',sessions:'جلسة',tasks:'مهمة',notices:'إعلان',accounts:'حركة حساب'};
+var F={
+ clients:[['name','الاسم','text'],['phone','الهاتف','text'],['address','العنوان','text'],['notes','ملاحظات','area']],
+ cases:[['number','رقم القضية','text'],['title','عنوان القضية','text'],['clientId','العميل','clients'],['opponent','الخصم','text'],['court','المحكمة','text'],['status','الحالة','select:مفتوحة,مغلقة']],
+ sessions:[['date','التاريخ','date'],['time','الوقت','time'],['clientId','الموكل','clients'],['caseId','القضية','cases'],['type','النوع','select:جلسة,مرافعة,خبرة,نطق بالحكم,أخرى'],['decision','القرار','area'],['nextDate','اتأجلت لجلسة (تاريخ)','date'],['notes','ملاحظات','area']],
+ tasks:[['title','المهمة','text'],['due','الموعد','date'],['caseId','القضية (اختياري)','cases'],['assignee','المسؤول','text'],['done','تمت؟','select:لا,نعم']]
+};
+F.notices=[['date','تاريخ الإعلان','date'],['caseId','القضية','cases'],['type','نوع الإعلان','select:صحيفة دعوى,إنذار,إعلان جلسة,حكم,أخرى'],['bailiff','اسم المحضر','text'],['office','مكتب المحضرين','text'],['handed','تاريخ التسليم للمحضر','date'],['status','الحالة','select:تم الإعلان,لم يتم بعد,مرتجع'],['notes','ملاحظات','area']];
+F.accounts=[['date','التاريخ','date'],['clientId','العميل','clients'],['caseId','القضية (اختياري)','cases'],['kind','البند','select:أتعاب متفق عليها,دفعة من العميل,مصروفات,أتعاب إضافية'],['amount','المبلغ','number'],['notes','ملاحظات','area']];
+var DEF={status:'مفتوحة',done:'لا',type:'جلسة'};
+var COL={
+ clients:[['الاسم',function(r){return esc(r.name)}],['الهاتف',function(r){return esc(r.phone)}],['القضايا',function(r){return db.cases.filter(function(c){return c.clientId===r.id}).length}]],
+ cases:[['الرقم',function(r){return esc(r.number)}],['العنوان',function(r){return esc(r.title)}],['العميل',function(r){return nm('clients',r.clientId)}],['المحكمة',function(r){return esc(r.court)}],['الحالة',function(r){return r.status==='مغلقة'?'<span class=mut>مغلقة</span>':'<span class=ok>مفتوحة</span>'}]],
+ sessions:[['التاريخ',function(r){return esc(r.date)+' '+esc(r.time||'')}],['رقم القضية',function(r){var c=find('cases',r.caseId)||{};return esc(c.number||'—')}],['القضية',function(r){return nm('cases',r.caseId)}],['الموكل',function(r){return nm('clients',r.clientId)}],['الخصم',function(r){var c=find('cases',r.caseId)||{};return esc(c.opponent||'—')}],['النوع',function(r){return esc(r.type)}],['القرار',function(r){return esc(r.decision)}]],
+ tasks:[['المهمة',function(r){return (r.done==='نعم'?'✔ ':'')+esc(r.title)}],['الموعد',function(r){return esc(r.due||'—')}],['القضية',function(r){return nm('cases',r.caseId)}],['المسؤول',function(r){return esc(r.assignee)}]]
+};
+COL.notices=[['التاريخ',function(r){return esc(r.date)}],['القضية',function(r){return nm('cases',r.caseId)}],['النوع',function(r){return esc(r.type)}],['المحضر',function(r){return esc(r.bailiff)}],['المكتب',function(r){return esc(r.office)}],['الحالة',function(r){return r.status==='تم الإعلان'?'<span class=ok>'+esc(r.status)+'</span>':'<span class=mut>'+esc(r.status)+'</span>'}]];
+COL.accounts=[['التاريخ',function(r){return esc(r.date)}],['العميل',function(r){return nm('clients',r.clientId)}],['القضية',function(r){return nm('cases',r.caseId)}],['البند',function(r){return esc(r.kind)}],['المبلغ',function(r){return esc(r.amount)}],['ملاحظات',function(r){return esc(r.notes)}]];
+function notify(t){var e=$('#note');e.textContent=t;e.hidden=false;clearTimeout(window._nt);window._nt=setTimeout(function(){e.hidden=true},2600)}
+function modal(h){$('#m').innerHTML='<div class=box>'+h+'</div>';$('#m').hidden=false}
+function closeM(){$('#m').hidden=true}
+function ask(msg,cb){window._cb=cb;modal('<p>'+esc(msg)+'</p><div class=bar><button class=pr onclick="closeM();window._cb()">تأكيد</button><button onclick="closeM()">إلغاء</button></div>')}
+function tabsNow(){return TABS.concat(window.ROLE==='admin'?[['users','المستخدمين والصلاحيات']]:[])}
+function nav(){$('#nav').innerHTML=tabsNow().map(function(t){return '<button class="'+(t[0]===tab?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'}).join('')}
+function go(t){tab=t;q='';render()}
+function render(){nav();$('#main').innerHTML=tab==='dash'?dash():tab==='accounts'?accSummary()+list('accounts'):tab==='users'?usersPage():list(tab)}
+function dash(){
+ var up=db.sessions.filter(function(s){return s.date>=today()&&s.date<=addDays(15)}).sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0});
+ var tk=db.tasks.filter(function(t){return t.done!=='نعم'&&t.due&&t.due<=today()});
+ var op=db.cases.filter(function(c){return c.status!=='مغلقة'}).length;
+ var card=function(s){var c=find('cases',s.caseId)||{};var cl=find('clients',s.clientId)||find('clients',c.clientId)||{};
+  var pv=s.prevId?'<div class=mut>جاية من جلسة '+esc(s.prevDate)+' — القرار: '+esc(s.prevDecision||'—')+'</div>':'';
+  return '<div class=al><b>'+esc(s.date)+' '+esc(s.time||'')+'</b> — قضية رقم '+esc(c.number||'—')+' — '+esc(c.title||'')+'<br>الموكل: '+esc(cl.name||'—')+' × الخصم: '+esc(c.opponent||'—')+' — '+esc(c.court||'')+pv+'</div>'};
+ return '<div class=c><b>عدد العملاء:</b> '+db.clients.length+' — <b>القضايا المفتوحة:</b> '+op+'</div>'
+ +'<div class=bar><button class=pr onclick="bkXlsx()">حفظ نسخة إكسيل</button><button class=w onclick="pickImp()">استرجاع من إكسيل</button><button onclick="waOpen()">إرسال شغل بكرة على واتس</button></div>'
+ +'<h3>الجلسات القادمة (15 يوم)</h3>'+(up.map(card).join('')||'<p class=mut>لا توجد جلسات قادمة.</p>')
+ +'<h3>مهام متأخرة أو مستحقة اليوم</h3>'+(tk.map(function(t){return '<div class=al>'+esc(t.title)+' — '+esc(t.due)+'</div>'}).join('')||'<p class=mut>لا توجد مهام متأخرة.</p>');
+}
+function list(t){
+ var C=COL[t];
+ var rows=db[t].filter(function(r){return !q||C.map(function(c){return String(c[1](r))}).join(' ').toLowerCase().indexOf(q.toLowerCase())>-1});
+ var body=rows.map(function(r){return '<tr>'+C.map(function(c){return '<td>'+c[1](r)+'</td>'}).join('')+'<td><button class=w onclick="openForm(\''+t+'\',\''+r.id+'\')">تعديل</button> <span class=w><button class=dg onclick="del(\''+t+'\',\''+r.id+'\')">حذف</button></span></td></tr>'}).join('')||'<tr><td colspan='+(C.length+1)+' class=mut>لا توجد بيانات بعد.</td></tr>';
+ return '<div class=bar><input placeholder="بحث..." value="'+esc(q)+'" oninput="q=this.value;render()"><span class=w><button class=pr onclick="openForm(\''+t+'\')">+ إضافة '+T[t]+'</button></span></div>'
+ +'<div class=tw><table><thead><tr>'+C.map(function(c){return '<th>'+c[0]+'</th>'}).join('')+'<th></th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+function caseOpts(cid,sel){return '<option value="">— اختر القضية —</option>'+db.cases.filter(function(c){return c.clientId===cid}).map(function(c){return '<option value="'+c.id+'"'+(c.id===sel?' selected':'')+'>'+esc(c.title||c.number)+'</option>'}).join('')}
+function refreshCases(){var s=$('#f_caseId');if(s)s.innerHTML=caseOpts($('#f_clientId').value,'')}
+function openForm(t,id){
+ var r=id?Object.assign({},find(t,id)):{};
+ if(t==='sessions'&&!r.clientId&&r.caseId){var cc=find('cases',r.caseId);if(cc)r.clientId=cc.clientId}
+ var h='<h3>'+(id?'تعديل':'إضافة')+' '+T[t]+'</h3>';
+ F[t].forEach(function(f){
+   var k=f[0],ty=f[2],v=r[k]==null?(DEF[k]||''):r[k],inp;
+   if(ty==='area')inp='<textarea id=f_'+k+'>'+esc(v)+'</textarea>';
+   else if(ty.indexOf('select:')===0)inp='<select id=f_'+k+'>'+ty.slice(7).split(',').map(function(o){return '<option'+(o===v?' selected':'')+'>'+o+'</option>'}).join('')+'</select>';
+   else if(t==='sessions'&&k==='caseId'){inp='<select id=f_caseId>'+caseOpts(r.clientId||'',v)+'</select>'}
+   else if(t==='sessions'&&k==='clientId'){inp='<select id=f_clientId onchange="refreshCases()"><option value="">— اختر الموكل —</option>'+db.clients.map(function(x){return '<option value="'+x.id+'"'+(x.id===v?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select>'}
+   else if(ty==='clients'||ty==='cases'){var opts=db[ty].map(function(x){return '<option value="'+x.id+'"'+(x.id===v?' selected':'')+'>'+esc(x.name||x.title)+'</option>'}).join('');inp='<select id=f_'+k+'><option value="">— اختر —</option>'+opts+'</select>'}
+   else inp='<input id=f_'+k+' type='+ty+' value="'+esc(v)+'">';
+   h+='<label>'+f[1]+inp+'</label>';
+ });
+ modal(h+'<div class=bar><button class=pr onclick="submit(\''+t+'\',\''+(id||'')+'\')">حفظ</button><button onclick="closeM()">إلغاء</button></div>');
+}
+function submit(t,id){
+ var o={};F[t].forEach(function(f){o[f[0]]=$('#f_'+f[0]).value.trim()});
+ if(!o[F[t][0][0]])return notify('الحقل الأول مطلوب');
+ var rec=id?Object.assign(find(t,id),o):Object.assign({id:uid()},o);if(!id)db[t].push(rec);if(t==='sessions')carry(rec);
+ save();closeM();render();notify('تم الحفظ');
+}
+function del(t,id){
+ ask('تأكيد حذف السجل؟',function(){db[t]=db[t].filter(function(x){return x.id!==id});save();render();notify('تم الحذف')});
+}
+function carry(s){
+ if(!s.nextDate)return;
+ var ch=s.nextId?find('sessions',s.nextId):null;
+ if(ch){ch.date=s.nextDate;ch.caseId=s.caseId;ch.clientId=s.clientId;ch.prevDate=s.date;ch.prevDecision=s.decision||'';ch.prevId=s.id;return}
+ ch={id:uid(),date:s.nextDate,time:'',clientId:s.clientId,caseId:s.caseId,type:'جلسة',decision:'',nextDate:'',notes:'مؤجلة تلقائيًا من جلسة '+s.date,prevDate:s.date,prevDecision:s.decision||'',prevId:s.id,demo:!!s.demo};
+ s.nextId=ch.id;db.sessions.push(ch);save();
+}
+function seed(){
+ if(db.clients.some(function(x){return x.demo}))return notify('البيانات التجريبية موجودة');
+ var D=addDays;
+ function ses(o){var s=Object.assign({id:uid(),time:'10:00',type:'جلسة',decision:'',nextDate:'',notes:'',demo:true},o);db.sessions.push(s);carry(s);return s}
+ function chainOf(o,steps){var s=ses(o),cur=s;steps.forEach(function(st){var ch=find('sessions',cur.nextId);if(!ch)return;ch.decision=st[0];ch.nextDate=st[1];ch.time=st[2];ch.type=st[3];ch.notes=st[4];if(ch.nextDate)carry(ch);cur=ch});return s}
+ [['d1','محمد السيد','01012345678','القاهرة - مدينة نصر','عميل منذ 2023، يتابع القضايا التجارية بنفسه'],
+  ['d2','شركة النور للتجارة','01198765432','الجيزة - الهرم','عقود إيجار ومنازعات موردين، المسؤول: السيد رئيس الشركة'],
+  ['d3','سارة عادل','01555512345','الإسكندرية - سموحة','قضية أحوال شخصية، تفضل التواصل صباحًا'],
+  ['d4','يوسف الدسوقي','01122233344','المنصورة - الجامعة','نزاع عمالي مع الشركة السابقة، لديه كل المستندات الأصلية'],
+  ['d5','مكتب العقارات الذهبية','01066677788','القاهرة - التجمع الخامس','مكتب عقاري، القضية مغلقة ونهائية']
+ ].forEach(function(c){db.clients.push({id:c[0],name:c[1],phone:c[2],address:c[3],notes:c[4],demo:true})});
+ [['dc1','1024/2025','مطالبة مالية بقيمة 50 ألف جنيه','d1','أحمد حسن','محكمة القاهرة الاقتصادية','مفتوحة'],
+  ['dc2','556/2026','فسخ عقد إيجار','d2','صالح عبد الرحمن','محكمة الجيزة الابتدائية','مفتوحة'],
+  ['dc3','210/2026','نفقة وحضانة','d3','عادل محمود','محكمة الأسرة بالإسكندرية','مفتوحة'],
+  ['dc4','88/2026','مستحقات نهاية الخدمة','d4','شركة الأمل للصناعات','محكمة العمل بالمنصورة','مفتوحة'],
+  ['dc5','301/2024','نزاع على ملكية شقة','d5','محمد فتحي','محكمة التجمع الابتدائية','مغلقة'],
+  ['dc6','14/2026','تعويض عن حادث مروري','d1','شركة التأمين المتحدة','محكمة القاهرة الابتدائية','مفتوحة']
+ ].forEach(function(c){db.cases.push({id:c[0],number:c[1],title:c[2],clientId:c[3],opponent:c[4],court:c[5],status:c[6],demo:true})});
+ chainOf({date:D(-20),time:'10:00',clientId:'d1',caseId:'dc1',type:'جلسة',decision:'تأجيل لتقديم المستندات',nextDate:D(3),notes:'حضر الموكل وقدم بعض المستندات'},
+  [['تأجيل للاطلاع على رد الخصم',D(14),'11:00','مرافعة','الخصم لم يرد بعد'],['حجز الدعوى للحكم','','10:30','نطق بالحكم','']]);
+ chainOf({date:D(-10),time:'12:00',clientId:'d2',caseId:'dc2',type:'جلسة',decision:'تأجيل لحضور الخصم',nextDate:D(1),notes:'الخصم غائب، تم إعلانه'},
+  [['تأجيل للحكم بعد الإعلان',D(20),'12:00','مرافعة','']]);
+ ses({date:D(4),time:'09:30',clientId:'d3',caseId:'dc3',type:'خبرة',decision:'',nextDate:'',notes:'انتداب خبير حسابي لتحديد الدخل'});
+ chainOf({date:D(-30),time:'10:00',clientId:'d4',caseId:'dc4',type:'جلسة',decision:'انتداب خبير حسابي',nextDate:D(7),notes:'تم سداد رسوم الخبير'},
+  [['تقرير الخبير مقدم، تأجيل للمرافعة',D(25),'10:00','مرافعة','']]);
+ ses({date:D(-60),time:'11:00',clientId:'d5',caseId:'dc5',type:'نطق بالحكم',decision:'حكم برفض الدعوى، القضية مغلقة',nextDate:'',notes:'تم استلام صورة الحكم'});
+ ses({date:D(6),time:'13:00',clientId:'d1',caseId:'dc6',type:'جلسة',decision:'',nextDate:'',notes:'انتظار تقرير الطب الشرعي'});
+ [['dt1','تجهيز مذكرة الدفاع',D(-1),'dc1','أ. منى (محامية)','لا'],
+  ['dt2','متابعة صورة الإعلان من المحضر',D(2),'dc2','موظف الاستقبال','لا'],
+  ['dt3','إرسال إيصال الأتعاب للعميلة',D(0),'dc3','المحاسب','لا'],
+  ['dt4','تسليم صورة الحكم للعميل',D(-10),'dc5','موظف الاستقبال','نعم']
+ ].forEach(function(t){db.tasks.push({id:t[0],title:t[1],due:t[2],caseId:t[3],assignee:t[4],done:t[5],demo:true})});
+ seedMore(D);
+ db.sessions.forEach(function(s){if(!s.demo)return;if(!s.time)s.time='10:00';if(!s.notes)s.notes='لا توجد ملاحظات إضافية';if(!s.decision)s.decision='لم يصدر قرار بعد'});
+ save();render();notify('تمت إضافة البيانات التجريبية');
+}
+function accSummary(){
+ var rows=db.clients.map(function(c){var fees=0,paid=0,exp=0;db.accounts.forEach(function(a){if(a.clientId!==c.id)return;var v=+a.amount||0;if(a.kind==='أتعاب متفق عليها'||a.kind==='أتعاب إضافية')fees+=v;else if(a.kind==='دفعة من العميل')paid+=v;else if(a.kind==='مصروفات')exp+=v});if(!fees&&!paid&&!exp)return '';return '<tr><td>'+esc(c.name)+'</td><td>'+fees+'</td><td>'+exp+'</td><td>'+paid+'</td><td><b>'+(fees+exp-paid)+'</b></td></tr>'}).join('');
+ return '<h3>ملخص حسابات العملاء</h3><div class=tw><table><thead><tr><th>العميل</th><th>الأتعاب</th><th>المصروفات</th><th>المدفوع</th><th>المتبقي عليه</th></tr></thead><tbody>'+(rows||'<tr><td colspan=5 class=mut>لا توجد حركات بعد.</td></tr>')+'</tbody></table></div><h3>كل الحركات</h3>';
+}
+function seedMore(D){
+ db.notices.push({id:'n1',date:D(-3),caseId:'dc1',type:'صحيفة دعوى',bailiff:'محمد عبد الله',office:'محضرو محكمة القاهرة الاقتصادية',handed:D(-5),status:'تم الإعلان',notes:'تم الإعلان لمحل الإقامة',demo:true},
+ {id:'n2',date:D(-1),caseId:'dc2',type:'إعلان جلسة',bailiff:'خالد السيد',office:'محضرو الجيزة',handed:D(-2),status:'لم يتم بعد',notes:'العنوان غير مؤكد ويحتاج تحري',demo:true},
+ {id:'n3',date:D(-8),caseId:'dc4',type:'إنذار',bailiff:'أحمد رمضان',office:'محضرو المنصورة',handed:D(-9),status:'مرتجع',notes:'الخصم رفض الاستلام',demo:true});
+ db.accounts.push({id:'a1',date:D(-30),clientId:'d1',caseId:'dc1',kind:'أتعاب متفق عليها',amount:15000,notes:'أتعاب القضية كاملة',demo:true},
+ {id:'a2',date:D(-20),clientId:'d1',caseId:'dc1',kind:'دفعة من العميل',amount:5000,notes:'الدفعة الأولى',demo:true},
+ {id:'a3',date:D(-10),clientId:'d1',caseId:'dc1',kind:'مصروفات',amount:800,notes:'رسوم إعلان ومستخرجات',demo:true},
+ {id:'a4',date:D(-5),clientId:'d2',caseId:'dc2',kind:'أتعاب متفق عليها',amount:8000,notes:'أتعاب عقد الإيجار',demo:true},
+ {id:'a5',date:D(-2),clientId:'d2',caseId:'dc2',kind:'دفعة من العميل',amount:8000,notes:'دفع كامل الأتعاب',demo:true},
+ {id:'a6',date:D(-12),clientId:'d4',caseId:'dc4',kind:'مصروفات',amount:1200,notes:'أتعاب خبير الحساب',demo:true},
+ {id:'a7',date:D(-1),clientId:'d3',caseId:'dc3',kind:'أتعاب إضافية',amount:2000,notes:'حضور جلسة إضافية',demo:true});
+}
+function wipeAll(){
+ ask('هيتم مسح كل البيانات نهائيًا (العملاء والقضايا والجلسات والإعلانات والحسابات والمهام). تكمل؟',function(){db={clients:[],cases:[],sessions:[],tasks:[],notices:[],accounts:[]};save();render();notify('تم مسح كل البيانات')});
+}
+async function saveBin(fn,ab,mime){
+ try{if(window.showSaveFilePicker){var h=await showSaveFilePicker({suggestedName:fn});var w=await h.createWritable();await w.write(ab);await w.close();return notify('تم الحفظ')}}catch(e){if(e&&e.name==='AbortError')return}
+ try{if(typeof claude!=='undefined'){var d=await claude.use('downloads');if(d){await d.save({filename:fn,data:ab});return notify('تم الحفظ')}}}catch(e){}
+ var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([ab],{type:mime}));a.download=fn;document.body.appendChild(a);a.click();a.remove();notify('تم الحفظ');
+}
+async function bkXlsx(){
+ if(typeof JSZip==='undefined')return notify('مكتبة الإكسيل مش محملة');
+ var KEYS=['clients','cases','sessions','tasks','notices','accounts'];
+ var z=new JSZip(),H="<?xml version='1.0' encoding='UTF-8' standalone='yes'?>",NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main',RS='http://schemas.openxmlformats.org/officeDocument/2006/relationships',PR='http://schemas.openxmlformats.org/package/2006/relationships';
+ var cl=function(i){var s='';for(var n=i+1;n>0;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s};
+ var over='',wb='',rel='';
+ KEYS.forEach(function(c,i){
+  var ks=[];db[c].forEach(function(r){Object.keys(r).forEach(function(k){if(ks.indexOf(k)<0)ks.push(k)})});
+  var all=[ks].concat(db[c].map(function(r){return ks.map(function(k){return r[k]===undefined?'':r[k]})}));
+  var rows=all.map(function(r,ri){return "<row r='"+(ri+1)+"'>"+r.map(function(v,ci){var ref=cl(ci)+(ri+1);if(typeof v==='number')return "<c r='"+ref+"'><v>"+v+"</v></c>";return "<c r='"+ref+"' t='inlineStr'><is><t>"+esc(v)+"</t></is></c>"}).join('')+'</row>'}).join('');
+  var n=i+1;
+  z.file('xl/worksheets/sheet'+n+'.xml',H+"<worksheet xmlns='"+NS+"'><sheetData>"+rows+"</sheetData></worksheet>");
+  wb+="<sheet name='"+c+"' sheetId='"+n+"' r:id='rId"+n+"'/>";
+  rel+="<Relationship Id='rId"+n+"' Type='"+RS+"/worksheet' Target='worksheets/sheet"+n+".xml'/>";
+  over+="<Override PartName='/xl/worksheets/sheet"+n+".xml' ContentType='application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml'/>";
+ });
+ var k=KEYS.length+1;
+ z.file('[Content_Types].xml',H+"<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'><Default Extension='rels' ContentType='application/vnd.openxmlformats-package.relationships+xml'/><Default Extension='xml' ContentType='application/xml'/><Override PartName='/xl/workbook.xml' ContentType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml'/><Override PartName='/xl/styles.xml' ContentType='application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml'/>"+over+"</Types>");
+ z.file('_rels/.rels',H+"<Relationships xmlns='"+PR+"'><Relationship Id='rId1' Type='"+RS+"/officeDocument' Target='xl/workbook.xml'/></Relationships>");
+ z.file('xl/workbook.xml',H+"<workbook xmlns='"+NS+"' xmlns:r='"+RS+"'><sheets>"+wb+"</sheets></workbook>");
+ z.file('xl/_rels/workbook.xml.rels',H+"<Relationships xmlns='"+PR+"'>"+rel+"<Relationship Id='rId"+k+"' Type='"+RS+"/styles' Target='styles.xml'/></Relationships>");
+ z.file('xl/styles.xml',H+"<styleSheet xmlns='"+NS+"'><fonts count='1'><font><sz val='11'/><name val='Arial'/></font></fonts><fills count='2'><fill><patternFill patternType='none'/></fill><fill><patternFill patternType='gray125'/></fill></fills><borders count='1'><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count='1'><xf numFmtId='0' fontId='0' fillId='0' borderId='0'/></cellStyleXfs><cellXfs count='1'><xf numFmtId='0' fontId='0' fillId='0' borderId='0' xfId='0'/></cellXfs></styleSheet>");
+ var ab=await z.generateAsync({type:'arraybuffer'});
+ await saveBin('law-office-backup-'+today()+'.xlsx',ab,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+async function impBk(file){
+ var out={clients:[],cases:[],sessions:[],tasks:[],notices:[],accounts:[]};
+ try{
+  var z=await JSZip.loadAsync(await file.arrayBuffer()),dp=new DOMParser();
+  var wb=dp.parseFromString(await z.file('xl/workbook.xml').async('string'),'application/xml');
+  var rl=dp.parseFromString(await z.file('xl/_rels/workbook.xml.rels').async('string'),'application/xml'),map={};
+  Array.from(rl.getElementsByTagName('Relationship')).forEach(function(r){map[r.getAttribute('Id')]=r.getAttribute('Target')});
+  var sh=Array.from(wb.getElementsByTagName('sheet'));
+  for(var i=0;i<sh.length;i++){
+   var sn=sh[i].getAttribute('name');if(!(sn in out))continue;
+   var sx=dp.parseFromString(await z.file('xl/'+map[sh[i].getAttribute('r:id')]).async('string'),'application/xml');
+   var grid=Array.from(sx.getElementsByTagName('row')).map(function(r){var a=[];Array.from(r.getElementsByTagName('c')).forEach(function(c){var L=c.getAttribute('r').replace(/[0-9]/g,''),ci=0;for(var j=0;j<L.length;j++)ci=ci*26+L.charCodeAt(j)-64;var v='',te=c.getElementsByTagName('t')[0],ve=c.getElementsByTagName('v')[0];if(te)v=te.textContent;else if(ve)v=+ve.textContent;a[ci-1]=v});return a});
+   var hd=grid[0]||[];
+   out[sn]=grid.slice(1).map(function(row){var o={};hd.forEach(function(h,j){if(h)o[h]=row[j]===undefined?'':row[j]});return o}).filter(function(o){return o.id});
+  }
+ }catch(e){return null}
+ return out;
+}
+function pickImp(){
+ var i=document.createElement('input');i.type='file';i.accept='.xlsx';
+ i.onchange=async function(){
+  if(!i.files[0])return;
+  var o=await impBk(i.files[0]);
+  if(!o)return notify('الملف ده مش نسخة صالحة');
+  ask('هيتم استبدال كل البيانات الحالية بالنسخة دي. تكمل؟',function(){db=o;save();render();notify('تم الاسترجاع')});
+ };
+ i.click();
+}
+function waMsg(){
+ var d=addDays(1);
+ var ss=db.sessions.filter(function(s){return s.date===d}).sort(function(a,b){return (a.time||'')<(b.time||'')?-1:1});
+ var ts=db.tasks.filter(function(t){return t.due===d&&t.done!=='نعم'});
+ var L=['شغل يوم '+d+':'];
+ ss.forEach(function(s){var c=find('cases',s.caseId)||{};var cl=find('clients',s.clientId)||{};L.push('- جلسة '+(s.time||'')+': قضية رقم '+(c.number||'—')+' ('+(c.title||'')+') — الموكل: '+(cl.name||'—')+' ضد '+(c.opponent||'—')+' — '+(c.court||'')+(s.type?' ('+s.type+')':''))});
+ ts.forEach(function(t){L.push('- مهمة: '+t.title+(t.assignee?' — المسؤول: '+t.assignee:''))});
+ if(L.length===1)L.push('لا يوجد شغل مسجل ليوم بكرة.');
+ return L.join('\n');
+}
+function waOpen(){
+ var n='';try{n=localStorage.getItem('lawoffice-wa')||''}catch(e){}
+ modal('<h3>إرسال شغل بكرة</h3><label>رقم الواتس (مع كود الدولة)<input id=wan value="'+esc(n)+'" placeholder="201xxxxxxxxx"></label><div class=bar><button class=pr onclick="waSend()">فتح واتساب</button><button onclick="closeM()">إلغاء</button></div>');
+}
+function waSend(){
+ var n=$('#wan').value.replace(/[^0-9]/g,'');
+ if(!n)return notify('اكتب الرقم');
+ try{localStorage.setItem('lawoffice-wa',n)}catch(e){}
+ closeM();window.open('https://wa.me/'+n+'?text='+encodeURIComponent(waMsg()),'_blank');
+}
+var ROLE_AR={admin:'مدير',lawyer:'محامي',staff:'موظف',viewer:'مشاهدة فقط'};
+function lbl(t,id,ty){return '<label>'+t+'<input id='+id+' type='+ty+'></label>'}
+function roleSel(id,sel){return '<select id='+id+'>'+Object.keys(ROLE_AR).map(function(k){return '<option value='+k+(k===sel?' selected':'')+'>'+ROLE_AR[k]+'</option>'}).join('')+'</select>'}
+function usersPage(){
+ var rows=(window.USERS||[]).map(function(u){return '<tr><td>'+esc(u.name||'—')+'</td><td>'+esc(u.email||'—')+'</td><td>'+esc(ROLE_AR[u.role]||u.role)+'</td><td><button onclick="chRole(\''+u.uid+'\')">تغيير الدور</button> <button class=dg onclick="rmRole(\''+u.uid+'\')">إلغاء الصلاحية</button></td></tr>'}).join('')||'<tr><td colspan=4 class=mut>لا يوجد مستخدمين بعد.</td></tr>';
+ return '<div class=bar><button class=pr onclick="addUserForm()">+ إضافة مستخدم</button></div><div class=tw><table><thead><tr><th>الاسم</th><th>الإيميل</th><th>الدور</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+ +'<h3>شرح الأدوار</h3><div class=c><b>مدير:</b> كل الصلاحيات، وبيدير المستخدمين.<br><b>محامي:</b> يضيف ويعدّل ويحذف كل البيانات.<br><b>موظف:</b> نفس صلاحيات المحامي حاليًا، وممكن نفرقهم بعد كده.<br><b>مشاهدة فقط:</b> يشوف البيانات بس، ومفيش أزرار تعديل.</div>';
+}
+function addUserForm(){modal('<h3>إضافة مستخدم</h3>'+lbl('الاسم','nu_name','text')+lbl('الإيميل (أو اسم المستخدم)','nu_email','text')+lbl('كلمة السر (6 حروف على الأقل)','nu_pw','password')+'<label>الدور'+roleSel('nu_role','lawyer')+'</label><div class=bar><button class=pr onclick="saveUser()">حفظ</button><button onclick="closeM()">إلغاء</button></div>')}
+async function saveUser(){
+ var n=$('#nu_name').value.trim(),e=$('#nu_email').value.trim(),p=$('#nu_pw').value,r=$('#nu_role').value;
+ if(!n||!e||p.length<6)return notify('اكمل البيانات (كلمة السر 6 حروف على الأقل)');
+ try{await FBA.addUser(n,e,p,r);closeM();notify('تمت إضافة المستخدم')}catch(x){notify('تعذر الإضافة: '+(x.code||x.message))}
+}
+function chRole(uid){var u=(window.USERS||[]).find(function(x){return x.uid===uid})||{};modal('<h3>تغيير الدور: '+esc(u.name||'')+'</h3>'+roleSel('cr_role',u.role)+'<div class=bar><button class=pr onclick="saveRole(\''+uid+'\')">حفظ</button><button onclick="closeM()">إلغاء</button></div>')}
+async function saveRole(uid){try{await FBA.setRole(uid,$('#cr_role').value);closeM();notify('تم تغيير الدور')}catch(x){notify('تعذر التغيير')}}
+function rmRole(uid){if(uid===window.ME)return notify('مش هينفع تلغي صلاحيتك إنت');ask('هيتم إلغاء صلاحية المستخدم، ومش هيقدر يشوف البيانات. تكمل؟',async function(){try{await FBA.removeRole(uid);notify('تم إلغاء الصلاحية')}catch(x){notify('تعذر الإلغاء')}})}
+function unseed(){
+ ask('هيتم مسح البيانات التجريبية فقط. تكمل؟',function(){['clients','cases','sessions','tasks','notices','accounts'].forEach(function(t){db[t]=db[t].filter(function(x){return !x.demo})});save();render();notify('تم مسح البيانات التجريبية')});
+}
+render();
+</script><script type=module>
+import {initializeApp,deleteApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {getDatabase,ref,set,remove,onValue} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+const CFG={apiKey:'AIzaSyDiyGuRZQzmsAhly7vsssAXU_sH_O_Fan0',authDomain:'kero-f6279.firebaseapp.com',databaseURL:'https://kero-f6279-default-rtdb.europe-west1.firebasedatabase.app',projectId:'kero-f6279',appId:'1:210948559114:web:a7d2951ff57e2c50392af3'};
+const app=initializeApp(CFG,'law'),auth=getAuth(app),rdb=getDatabase(app);
+const KEYS=['clients','cases','sessions','tasks','notices','accounts'];
+const norm=v=>v.indexOf('@')>-1?v:v+'@gmail.com';
+let unsubs=[];
+window.pushDb=function(d){
+ if(!window.LOADED||window.ROLE==='viewer')return;
+ const out={};KEYS.forEach(k=>{out[k]={};d[k].forEach(r=>{out[k][r.id]=r})});
+ set(ref(rdb,'law'),out).catch(e=>console.error(e));
+};
+window.FBA={
+ login:(u,p)=>signInWithEmailAndPassword(auth,norm(u.trim()),p),
+ logout:()=>signOut(auth),
+ addUser:async(name,email,pw,role)=>{
+  const sec=initializeApp(CFG,'sec'+Date.now()),sa=getAuth(sec);
+  try{const c=await createUserWithEmailAndPassword(sa,norm(email.trim()),pw);await signOut(sa);await set(ref(rdb,'roles/'+c.user.uid),{role,email:norm(email.trim()),name});}
+  finally{await deleteApp(sec)}
+ },
+ setRole:(uid,role)=>set(ref(rdb,'roles/'+uid+'/role'),role),
+ removeRole:(uid)=>remove(ref(rdb,'roles/'+uid))
+};
+function overlay(){
+ let o=document.getElementById('lg');
+ if(!o){o=document.createElement('div');o.id='lg';o.style.cssText='position:fixed;inset:0;background:#f3f1ec;display:flex;align-items:center;justify-content:center;z-index:50;font-family:Tahoma,Arial,sans-serif';
+  o.innerHTML=`<form id=lf style="background:#fff;padding:24px;border-radius:10px;width:min(340px,92%);box-sizing:border-box"><h3 style="margin-top:0">تسجيل الدخول</h3><p id=lmsg style="color:#b42318"></p><input id=le placeholder="الإيميل أو اسم المستخدم" required style="width:100%;padding:9px;margin:6px 0;box-sizing:border-box"><input id=lp type=password placeholder="كلمة السر" required style="width:100%;padding:9px;margin:6px 0;box-sizing:border-box"><button style="width:100%;padding:10px;background:#7a4b1f;color:#fff;border:0;border-radius:6px;margin-top:6px">دخول</button><p id=lm style="color:#b42318;min-height:18px"></p></form>`;
+  document.body.appendChild(o);
+  document.getElementById('lf').onsubmit=async e=>{e.preventDefault();document.getElementById('lm').textContent='';try{await FBA.login(document.getElementById('le').value,document.getElementById('lp').value)}catch(x){document.getElementById('lm').textContent='الإيميل أو كلمة السر غلط'}};
+ }
+ return o;
+}
+function showLogin(msg){const o=overlay();o.style.display='flex';document.getElementById('lmsg').textContent=msg||'';}
+function hideLogin(){const o=document.getElementById('lg');if(o)o.style.display='none'}
+function addOut(){if(document.getElementById('lo'))return;const b=document.createElement('button');b.id='lo';b.textContent='خروج';b.onclick=()=>FBA.logout();document.querySelector('header').appendChild(b)}
+onAuthStateChanged(auth,u=>{
+ unsubs.forEach(f=>f());unsubs=[];
+ window.LOADED=false;window.ROLE=null;window.ME=null;window.USERS=[];window._uSub=false;window._lSub=false;
+ if(!u){document.body.classList.add('ro');const hb0=document.getElementById('hus');if(hb0)hb0.hidden=true;showLogin('');if(window.render)render();return}
+ window.ME=u.uid;addOut();
+ unsubs.push(onValue(ref(rdb,'roles/'+u.uid),s=>{
+  const v=s.val();
+  if(!v||!v.role){window.ROLE=null;document.body.classList.add('ro');showLogin('حسابك مش مفعّل، كلم المدير عشان يضيفك');return}
+  window.ROLE=v.role;hideLogin();
+  const hb=document.getElementById('hus');if(hb)hb.hidden=v.role!=='admin';
+  document.body.classList.toggle('ro',v.role==='viewer');
+  if(v.role==='admin'&&!window._uSub){window._uSub=true;unsubs.push(onValue(ref(rdb,'roles'),s2=>{window.USERS=Object.entries(s2.val()||{}).map(([id,x])=>Object.assign({uid:id},x));if(window.tab==='users')render()}))}
+  if(!window._lSub){window._lSub=true;unsubs.push(onValue(ref(rdb,'law'),s3=>{const val=s3.val()||{};KEYS.forEach(k=>{db[k]=Object.values(val[k]||{})});window.LOADED=true;render()}))}
+  render();
+ }));
+});
+</script>
+</body></html>
